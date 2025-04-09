@@ -1,0 +1,77 @@
+from typing import Dict, List
+from models.station import Station
+from models.line import Line
+from services.subway_editor import SubwayEditor
+from services.subway_planner import SubwayPlanner
+from utils.initializer import initialize_from_json  # 自定义函数：从JSON文件初始化地铁数据
+
+"""地铁系统主类，整合编辑器和规划器功能"""
+
+class SubwaySystem:
+    def __init__(self):
+        """初始化地铁系统，加载数据"""
+        # 保存原始数据的副本，用于重置
+        self.stations, self.lines = initialize_from_json('resources/data/line_speed_final.json')
+        self.editor = SubwayEditor(self.stations, self.lines)
+        self.planner = SubwayPlanner(self.stations, self.lines)
+
+    def get_system_data(self):
+        """获取系统数据用于显示"""
+        data = {}
+        for line_id, line in self.lines.items():
+            data[line_id] = {
+                'speed': line.speed,
+                'stations': line.stations
+            }
+        return data
+
+    def calculate_fare(self, distance: float) -> float:
+        """根据距离计算票价"""
+        if distance <= 6000:  # 6公里以内
+            return 3
+        elif distance <= 12000:  # 6-12公里
+            return 4
+        elif distance <= 22000:  # 12-22公里
+            return 5
+        elif distance <= 32000:  # 22-32公里
+            return 6
+        else:  # 32公里以上
+            return 7 + ((distance - 32000) // 20000)  # 每增加20公里增加1元
+
+    def format_route(self, path: List[str], total_time: float, lines: List[str], details: Dict) -> str:
+        """格式化路线信息为可读文本"""
+        result = []
+        result.append(f"=== 乘车方案 ===")
+        result.append(f"起点: {path[0]}")
+        result.append(f"终点: {path[-1]}")
+        result.append(f"总距离: {details['total_distance']/1000:.2f}公里")
+        result.append(f"总时间: {details['total_time']:.2f}分钟")
+        result.append(f"换乘次数: {details['transfers']}")
+        result.append(f"票价: {self.calculate_fare(details['total_distance'])}元")
+        
+        result.append("\n详细路线:")
+        current_line = None
+        for segment in details['segments']:
+            if segment['line'] != current_line:
+                current_line = segment['line']
+                result.append(f"\n乘坐 {current_line}")
+            result.append(f"  {segment['from']} -> {segment['to']}")
+            
+        return "\n".join(result)  # str.join(): 使用指定字符串连接序列中的所有字符串
+
+    def plan_route(self, start: str, end: str, mode: str = "time") -> str:
+        """规划路线（最短时间或最少换乘）"""
+        try:
+            if mode == "time":
+                path, total_time, lines = self.planner.find_shortest_time_path(start, end)
+            else:
+                path, transfers, lines = self.planner.find_least_transfers_path(start, end)
+                
+            if not path:
+                return "未找到可行路线"
+                
+            details = self.planner.calculate_route_details(path, lines)
+            return self.format_route(path, details['total_time'], lines, details)
+            
+        except ValueError as e:
+            return f"错误：{str(e)}" 

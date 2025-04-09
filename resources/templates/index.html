@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>北京地铁线路查询系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        .tab-content {
+            padding: 20px;
+            background-color: white;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .subway-line {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            background-color: #f8f9fa;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        .subway-line:hover {
+            box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+        }
+        .station-btn {
+            margin: 0;
+            width: 100%;
+            max-width: 110px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .station-btn:hover {
+            background: #e7f1ff;
+            transform: translateY(-1px);
+        }
+        .station-btn.selected {
+            background: #007bff;
+            color: white;
+            font-weight: bold;
+        }
+        .line-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .line-header h5 {
+            margin: 0;
+            color: #0056b3;
+            font-weight: bold;
+        }
+        .speed-badge {
+            background-color: #e7f1ff;
+            color: #0056b3;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+        }
+        .edit-forms {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            background-color: #f8f9fa;
+        }
+        .edit-forms.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        .nav-tabs {
+            border-bottom: none;
+        }
+        .nav-tabs .nav-link {
+            border: none;
+            padding: 10px 20px;
+            margin-right: 5px;
+            border-radius: 10px 10px 0 0;
+            font-weight: 500;
+        }
+        .nav-tabs .nav-link.active {
+            background-color: white;
+            border-bottom: 3px solid #007bff;
+        }
+        .control-panel {
+            background-color: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .route-modal .modal-content {
+            border-radius: 15px;
+        }
+        .route-modal .modal-header {
+            background-color: #f8f9fa;
+            border-radius: 15px 15px 0 0;
+        }
+        .route-details {
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .route-segment {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .stations {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .station-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 120px;
+            min-height: 70px;
+        }
+        .transfer-info {
+            min-height: 20px;
+            margin-top: 4px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2px;
+        }
+        .transfer-badge {
+            padding: 1px 4px;
+            font-size: 0.65rem;
+            background-color: #e7f1ff;
+            color: #0056b3;
+            border-radius: 3px;
+            white-space: nowrap;
+        }
+        .error-feedback {
+            color: #dc3545;
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+            display: none;
+        }
+        .form-control.is-invalid {
+            border-color: #dc3545;
+        }
+        .form-control.is-invalid + .error-feedback {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="text-center mb-4">北京地铁线路查询系统</h1>
+        
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="lines-tab" data-bs-toggle="tab" data-bs-target="#lines" type="button">线路信息</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="edit-tab" data-bs-toggle="tab" data-bs-target="#edit" type="button">编辑线路</button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- 线路信息面板 -->
+            <div class="tab-pane fade show active" id="lines">
+                <div class="control-panel">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <div class="d-flex gap-3 align-items-center">
+                                <div class="input-group" style="max-width: 200px;">
+                                    <span class="input-group-text">起点</span>
+                                    <input type="text" class="form-control" id="start" readonly placeholder="点击站点选择起点">
+                                </div>
+                                <div class="input-group" style="max-width: 200px;">
+                                    <span class="input-group-text">终点</span>
+                                    <input type="text" class="form-control" id="end" readonly placeholder="点击站点选择终点">
+                                </div>
+                                <button id="resetSelection" class="btn btn-outline-secondary" disabled>重置</button>
+                            </div>
+                            <div class="mt-2">
+                                <small id="selectionStatus" class="text-muted">请选择或输入起点站</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="btn-group">
+                                <button class="btn btn-outline-primary active" data-mode="time">最短时间</button>
+                                <button class="btn btn-outline-primary" data-mode="transfers">最少换乘</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="subwayLines"></div>
+            </div>
+
+            <!-- 编辑线路面板 -->
+            <div class="tab-pane fade" id="edit">
+                <div class="btn-group w-100 mb-4">
+                    <button class="btn btn-outline-primary" onclick="showEditForm('add')">添加站点</button>
+                    <button class="btn btn-outline-primary" onclick="showEditForm('remove')">删除站点</button>
+                </div>
+
+                <!-- 添加站点表单 -->
+                <div id="addStationForm" class="edit-forms">
+                    <h4>添加站点</h4>
+                    <form onsubmit="handleAddStation(event)">
+                        <div class="mb-3">
+                            <label class="form-label">线路编号</label>
+                            <input type="text" class="form-control" name="line_id" required>
+                            <div class="error-feedback">请输入有效的线路编号（如：1号线、13号线）</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">前一站名</label>
+                            <input type="text" class="form-control" name="prev_station" required>
+                            <div class="error-feedback">该站点不存在于指定线路中</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">后一站名</label>
+                            <input type="text" class="form-control" name="next_station" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">新站点名称</label>
+                            <input type="text" class="form-control" name="new_station" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">与前一站距离(米)</label>
+                            <input type="number" class="form-control" name="prev_distance" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">与后一站距离(米)</label>
+                            <input type="number" class="form-control" name="next_distance" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">添加站点</button>
+                    </form>
+                </div>
+
+                <!-- 删除站点表单 -->
+                <div id="removeStationForm" class="edit-forms">
+                    <h4>删除站点</h4>
+                    <form onsubmit="handleRemoveStation(event)">
+                        <div class="mb-3">
+                            <label class="form-label">站点名称</label>
+                            <input type="text" class="form-control" name="station" required>
+                            <div class="error-feedback">该站点不存在</div>
+                        </div>
+                        <button type="submit" class="btn btn-danger">删除站点</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 路线结果模态框 -->
+    <div class="modal fade route-modal" id="routeModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">乘车方案</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="routeResult" class="route-details"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let selectedStations = [];
+        let currentMode = 'time';
+        let subwayData = null;
+        let routeModal = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            routeModal = new bootstrap.Modal(document.getElementById('routeModal'));
+            initializeSubwayData();
+        });
+
+        // 初始化：获取地铁线路数据
+        async function initializeSubwayData() {
+            try {
+                const response = await fetch('/get_subway_data');
+                subwayData = await response.json();
+                displaySubwayLines(subwayData);
+            } catch (error) {
+                alert('加载地铁数据失败：' + error.message);
+            }
+        }
+
+        // 显示地铁线路
+        function displaySubwayLines(data) {
+            const container = document.getElementById('subwayLines');
+            container.innerHTML = '';
+            
+            // 将线路按照自然顺序排序
+            const sortedLines = Object.entries(data).sort((a, b) => {
+                // 提取数字部分
+                const getLineNumber = (str) => {
+                    const match = str.match(/(\d+)/);
+                    return match ? parseInt(match[0]) : Infinity;
+                };
+                
+                const aNum = getLineNumber(a[0]);
+                const bNum = getLineNumber(b[0]);
+                
+                // 如果都是数字线路，按数字排序
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    return aNum - bNum;
+                }
+                
+                // 如果有特殊线路（如S1线、八通线等），放在后面
+                if (isNaN(aNum)) return 1;
+                if (isNaN(bNum)) return -1;
+                
+                return 0;
+            });
+
+            sortedLines.forEach(([lineId, lineInfo]) => {
+                const lineDiv = document.createElement('div');
+                lineDiv.className = 'subway-line';
+                
+                const header = document.createElement('div');
+                header.className = 'line-header';
+                header.innerHTML = `
+                    <h5>${lineId}</h5>
+                    <span class="speed-badge">时速: ${lineInfo.speed}km/h</span>
+                `;
+                
+                const stations = document.createElement('div');
+                stations.className = 'stations';
+                
+                lineInfo.stations.forEach(station => {
+                    const stationContainer = document.createElement('div');
+                    stationContainer.className = 'station-container';
+                    
+                    const btn = document.createElement('button');
+                    btn.className = 'station-btn';
+                    btn.textContent = station;
+                    btn.onclick = () => handleStationClick(station);
+                    
+                    stationContainer.appendChild(btn);
+                    
+                    // 添加换乘信息
+                    const transferLines = getTransferLines(station, lineId);
+                    if (transferLines.length > 0) {
+                        const transferInfo = document.createElement('div');
+                        transferInfo.className = 'transfer-info';
+                        transferLines.forEach(transferLine => {
+                            const badge = document.createElement('span');
+                            badge.className = 'transfer-badge';
+                            badge.textContent = transferLine;
+                            transferInfo.appendChild(badge);
+                        });
+                        stationContainer.appendChild(transferInfo);
+                    }
+                    
+                    stations.appendChild(stationContainer);
+                });
+                
+                lineDiv.appendChild(header);
+                lineDiv.appendChild(stations);
+                container.appendChild(lineDiv);
+            });
+        }
+
+        // 获取换乘线路信息
+        function getTransferLines(station, currentLine) {
+            const transferLines = [];
+            // 从地铁数据中获取该站点所属的所有线路
+            Object.entries(subwayData).forEach(([lineId, lineInfo]) => {
+                if (lineId !== currentLine && lineInfo.stations.includes(station)) {
+                    transferLines.push(lineId);
+                }
+            });
+            return transferLines;
+        }
+
+        // 获取输入框元素
+        const startInput = document.getElementById('start');
+        const endInput = document.getElementById('end');
+
+        // 处理输入框输入事件
+        startInput.addEventListener('change', function() {
+            handleStationInput(this.value, 0);
+        });
+
+        endInput.addEventListener('change', function() {
+            handleStationInput(this.value, 1);
+        });
+
+        // 处理站点输入
+        function handleStationInput(stationName, index) {
+            // 检查站点是否存在
+            let stationExists = false;
+            Object.values(subwayData).some(line => {
+                if (line.stations.includes(stationName)) {
+                    stationExists = true;
+                    return true;
+                }
+            });
+
+            if (!stationExists) {
+                alert('该站点不存在！');
+                if (index === 0) {
+                    startInput.value = '';
+                } else {
+                    endInput.value = '';
+                }
+                return;
+            }
+
+            // 更新选中状态
+            if (index === 0) {
+                if (selectedStations.length > 0) {
+                    selectedStations[0] = stationName;
+                } else {
+                    selectedStations.push(stationName);
+                }
+            } else {
+                if (selectedStations.length > 1) {
+                    selectedStations[1] = stationName;
+                } else if (selectedStations.length === 1) {
+                    selectedStations.push(stationName);
+                } else {
+                    alert('请先选择起点站！');
+                    endInput.value = '';
+                    return;
+                }
+            }
+
+            // 更新站点按钮选中状态
+            updateStationButtonsState();
+
+            // 更新状态提示
+            updateSelectionStatus();
+
+            // 如果已选择两个站点，执行查询
+            if (selectedStations.length === 2) {
+                queryRoute();
+            }
+        }
+
+        // 更新站点按钮状态
+        function updateStationButtonsState() {
+            document.querySelectorAll('.station-btn').forEach(btn => {
+                btn.classList.remove('selected');
+                if (selectedStations.includes(btn.textContent)) {
+                    btn.classList.add('selected');
+                }
+            });
+        }
+
+        // 更新选择状态提示
+        function updateSelectionStatus() {
+            const statusEl = document.getElementById('selectionStatus');
+            const resetBtn = document.getElementById('resetSelection');
+            
+            if (selectedStations.length === 0) {
+                statusEl.textContent = '请选择或输入起点站';
+                resetBtn.disabled = true;
+                startInput.value = '';
+                endInput.value = '';
+            } else if (selectedStations.length === 1) {
+                statusEl.textContent = '请选择或输入终点站';
+                resetBtn.disabled = false;
+                startInput.value = selectedStations[0];
+            } else {
+                startInput.value = selectedStations[0];
+                endInput.value = selectedStations[1];
+            }
+        }
+
+        // 修改重置功能
+        document.getElementById('resetSelection').onclick = () => {
+            selectedStations = [];
+            updateStationButtonsState();
+            updateSelectionStatus();
+        };
+
+        // 修改站点点击处理函数
+        function handleStationClick(station) {
+            fetch('/click_station', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    station: station,
+                    currentStart: startInput.value || null,
+                    currentEnd: endInput.value || null
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 更新输入框
+                startInput.value = data.start || '';
+                endInput.value = data.end || '';
+                
+                // 更新选中状态
+                selectedStations = [];
+                if (data.start) selectedStations.push(data.start);
+                if (data.end) selectedStations.push(data.end);
+                
+                // 更新UI状态
+                updateStationButtonsState();
+                updateSelectionStatus();
+                
+                // 如果起点和终点都已选择，自动查询路线
+                if (data.start && data.end) {
+                    queryRoute();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('操作失败，请重试');
+            });
+        }
+
+        // 切换查询模式
+        document.querySelectorAll('[data-mode]').forEach(btn => {
+            btn.onclick = (e) => {
+                currentMode = e.target.dataset.mode;
+                document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                if (selectedStations.length === 2) {
+                    queryRoute();
+                }
+            };
+        });
+
+        // 查询路线
+        async function queryRoute() {
+            try {
+                const response = await fetch('/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        start: selectedStations[0],
+                        end: selectedStations[1],
+                        mode: currentMode
+                    })
+                });
+                const result = await response.json();
+                document.getElementById('routeResult').innerHTML = formatRouteResult(result.result);
+                routeModal.show();
+            } catch (error) {
+                alert('查询失败：' + error.message);
+            }
+        }
+
+        // 格式化路线结果
+        function formatRouteResult(result) {
+            return result.split('\n').map(line => {
+                if (line.startsWith('乘坐')) {
+                    return `<div class="route-segment"><strong>${line}</strong></div>`;
+                }
+                return `<div>${line}</div>`;
+            }).join('');
+        }
+
+        // 显示编辑表单
+        function showEditForm(formType) {
+            document.querySelectorAll('.edit-forms').forEach(form => {
+                form.classList.remove('active');
+            });
+            document.getElementById(`${formType}StationForm`).classList.add('active');
+        }
+
+        // 验证线路是否存在
+        function validateLine(lineId) {
+            return subwayData.hasOwnProperty(lineId);
+        }
+
+        // 验证站点是否存在于指定线路
+        function validateStation(station, lineId) {
+            return subwayData[lineId]?.stations.includes(station);
+        }
+
+        // 验证站点是否相邻
+        function validateAdjacentStations(station1, station2, lineId) {
+            const stations = subwayData[lineId]?.stations;
+            if (!stations) return false;
+            const index1 = stations.indexOf(station1);
+            const index2 = stations.indexOf(station2);
+            return Math.abs(index1 - index2) === 1;
+        }
+
+        // 处理添加站点
+        async function handleAddStation(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+            
+            // 重置所有错误状态
+            form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+            
+            // 验证线路
+            if (!validateLine(data.line_id)) {
+                const input = form.querySelector('[name="line_id"]');
+                input.classList.add('is-invalid');
+                return;
+            }
+            
+            // 验证前后站点存在性和相邻性
+            if (!validateStation(data.prev_station, data.line_id) || 
+                !validateStation(data.next_station, data.line_id)) {
+                form.querySelector('[name="prev_station"]').classList.add('is-invalid');
+                form.querySelector('[name="next_station"]').classList.add('is-invalid');
+                return;
+            }
+            
+            if (!validateAdjacentStations(data.prev_station, data.next_station, data.line_id)) {
+                form.querySelector('[name="prev_station"]').classList.add('is-invalid');
+                form.querySelector('[name="next_station"]').classList.add('is-invalid');
+                return;
+            }
+            
+            // 验证距离
+            if (data.prev_distance <= 0 || data.next_distance <= 0) {
+                const distInputs = form.querySelectorAll('[type="number"]');
+                distInputs.forEach(input => input.classList.add('is-invalid'));
+                return;
+            }
+
+            // 如果验证通过，发送请求
+            try {
+                await handleEditOperation('/edit/add_station', data);
+                form.reset();
+            } catch (error) {
+                alert('操作失败：' + error.message);
+            }
+        }
+
+        // 处理删除站点
+        async function handleRemoveStation(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+            
+            // 验证站点是否存在
+            let stationExists = false;
+            Object.values(subwayData).some(line => {
+                if (line.stations.includes(data.station)) {
+                    stationExists = true;
+                    return true;
+                }
+            });
+            
+            if (!stationExists) {
+                form.querySelector('[name="station"]').classList.add('is-invalid');
+                return;
+            }
+
+            // 验证是否为换乘站（不能删除换乘站）
+            const transferCount = Object.values(subwayData).filter(line => 
+                line.stations.includes(data.station)
+            ).length;
+            
+            if (transferCount > 1) {
+                alert('不能删除换乘站！');
+                return;
+            }
+
+            try {
+                await handleEditOperation('/edit/remove_station', data);
+                form.reset();
+            } catch (error) {
+                alert('操作失败：' + error.message);
+            }
+        }
+
+        // 处理编辑操作
+        async function handleEditOperation(endpoint, formData) {
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                const result = await response.json();
+                alert(result.message);
+                if (result.success) {
+                    // 使用返回的新数据更新界面
+                    subwayData = result.data;
+                    displaySubwayLines(subwayData);
+                    document.querySelectorAll('.edit-forms').forEach(form => {
+                        form.classList.remove('active');
+                    });
+                }
+            } catch (error) {
+                alert('操作失败：' + error.message);
+            }
+        }
+    </script>
+</body>
+</html> 
