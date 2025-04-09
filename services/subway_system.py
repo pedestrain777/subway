@@ -3,20 +3,17 @@ from models.station import Station
 from models.line import Line
 from services.subway_editor import SubwayEditor
 from services.subway_planner import SubwayPlanner
-from utils.initializer import initialize_from_json  # 自定义函数：从JSON文件初始化地铁数据
-
-"""地铁系统主类，整合编辑器和规划器功能"""
+from utils.initializer import initialize_from_json
 
 class SubwaySystem:
     def __init__(self):
-        """初始化地铁系统，加载数据"""
         # 保存原始数据的副本，用于重置
         self.stations, self.lines = initialize_from_json('resources/data/line_speed_final.json')
         self.editor = SubwayEditor(self.stations, self.lines)
         self.planner = SubwayPlanner(self.stations, self.lines)
 
     def get_system_data(self):
-        """获取系统数据用于显示"""
+        """获取当前系统数据，用于前端显示"""
         data = {}
         for line_id, line in self.lines.items():
             data[line_id] = {
@@ -26,7 +23,7 @@ class SubwaySystem:
         return data
 
     def calculate_fare(self, distance: float) -> float:
-        """根据距离计算票价"""
+        """计算票价"""
         if distance <= 6000:  # 6公里以内
             return 3
         elif distance <= 12000:  # 6-12公里
@@ -39,7 +36,7 @@ class SubwaySystem:
             return 7 + ((distance - 32000) // 20000)  # 每增加20公里增加1元
 
     def format_route(self, path: List[str], total_time: float, lines: List[str], details: Dict) -> str:
-        """格式化路线信息为可读文本"""
+        """格式化路线信息"""
         result = []
         result.append(f"=== 乘车方案 ===")
         result.append(f"起点: {path[0]}")
@@ -57,10 +54,10 @@ class SubwaySystem:
                 result.append(f"\n乘坐 {current_line}")
             result.append(f"  {segment['from']} -> {segment['to']}")
             
-        return "\n".join(result)  # str.join(): 使用指定字符串连接序列中的所有字符串
+        return "\n".join(result)
 
     def plan_route(self, start: str, end: str, mode: str = "time") -> str:
-        """规划路线（最短时间或最少换乘）"""
+        """规划路线"""
         try:
             if mode == "time":
                 path, total_time, lines = self.planner.find_shortest_time_path(start, end)

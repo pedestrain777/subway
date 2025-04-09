@@ -3,15 +3,12 @@ import heapq
 from models.station import Station
 from models.line import Line
 
-"""地铁路线规划器，提供最短时间和最少换乘路线查询"""
-
 class SubwayPlanner:
     def __init__(self, stations: Dict[str, Station], lines: Dict[str, Line]):
-        """初始化规划器，处理环形线路"""
         self.stations = stations
         self.lines = lines
         # 添加环形线路的特殊处理
-        self.circle_lines = {"2号线", "10号线"}  # 添加2号线与10号线作为环形线路
+        self.circle_lines = {"2号线", "10号线"}  # 添加2号线作为环形线路
         self._add_circle_line_connections()
 
     def _add_circle_line_connections(self):
@@ -49,7 +46,7 @@ class SubwayPlanner:
         return next(iter(common_lines))
 
     def find_least_transfers_path(self, start: str, end: str) -> Tuple[List[str], int, List[str]]:
-        """查找最少换乘路径，相同换乘次数取最短时间"""
+        """查找最少换乘路径，当有多条最少换乘路径时选择时间最短的"""
         if start not in self.stations or end not in self.stations:
             raise ValueError("起点或终点站不存在")
 
@@ -244,7 +241,7 @@ class SubwayPlanner:
         return path[::-1], times[end], list(dict.fromkeys(path_lines[::-1]))
 
     def calculate_route_details(self, path: List[str], lines: List[str]) -> Dict:
-        """计算路线的详细信息（距离、时间、换乘等）"""
+        """计算路线详细信息"""
         details = {
             "total_distance": 0,
             "total_time": 0,
