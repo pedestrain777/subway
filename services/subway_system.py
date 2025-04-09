@@ -42,7 +42,7 @@ class SubwaySystem:
         result.append(f"起点: {path[0]}")
         result.append(f"终点: {path[-1]}")
         result.append(f"总距离: {details['total_distance']/1000:.2f}公里")
-        result.append(f"总时间: {details['total_time']:.2f}分钟")
+        result.append(f"总时间: {total_time:.2f}分钟")
         result.append(f"换乘次数: {details['transfers']}")
         result.append(f"票价: {self.calculate_fare(details['total_distance'])}元")
         
@@ -52,8 +52,9 @@ class SubwaySystem:
             if segment['line'] != current_line:
                 current_line = segment['line']
                 result.append(f"\n乘坐 {current_line}")
-            result.append(f"  {segment['from']} -> {segment['to']}")
+            result.append(f"{segment['from']} -> {segment['to']}")
             
+        result.append("\n" + "="*30 + "\n")  # 添加分隔线
         return "\n".join(result)
 
     def plan_route(self, start: str, end: str, mode: str = "time") -> str:
@@ -61,14 +62,25 @@ class SubwaySystem:
         try:
             if mode == "time":
                 path, total_time, lines = self.planner.find_shortest_time_path(start, end)
+                if not path:
+                    return "未找到可行路线"
+                details = self.planner.calculate_route_details(path, lines)
+                return self.format_route(path, total_time, lines, details)
             else:
-                path, transfers, lines = self.planner.find_least_transfers_path(start, end)
+                paths = self.planner.find_least_transfers_path(start, end)
+                if not paths:
+                    return "未找到可行路线"
                 
-            if not path:
-                return "未找到可行路线"
+                result = []
+                result.append("最少换乘路线方案：\n")
                 
-            details = self.planner.calculate_route_details(path, lines)
-            return self.format_route(path, details['total_time'], lines, details)
-            
+                # 遍历所有路径并格式化显示
+                for i, (path, transfers, lines, total_time) in enumerate(paths, 1):
+                    result.append(f"\n{'='*15} 路线 {i} {'='*15}")
+                    details = self.planner.calculate_route_details(path, lines)
+                    result.append(self.format_route(path, total_time, lines, details))
+                
+                return "\n".join(result)
+                
         except ValueError as e:
             return f"错误：{str(e)}" 

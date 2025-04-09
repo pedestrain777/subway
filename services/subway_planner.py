@@ -45,30 +45,38 @@ class SubwayPlanner:
             
         return next(iter(common_lines))
 
-    def find_least_transfers_path(self, start: str, end: str) -> Tuple[List[str], int, List[str]]:
-        """查找最少换乘路径，当有多条最少换乘路径时选择时间最短的"""
+    def find_least_transfers_path(self, start: str, end: str) -> List[Tuple[List[str], int, List[str], float]]:
+        """查找最少换乘路径，返回所有最短换乘路径并按时间排序
+        Returns:
+            List[Tuple[path, transfers, lines, time]]: 所有最短换乘路径，按时间排序
+        """
         if start not in self.stations or end not in self.stations:
             raise ValueError("起点或终点站不存在")
 
         all_paths = []
-        min_transfers_found = float('inf')  # 记录已找到的最少换乘次数
+        min_transfers_found = float('inf')
         
-        def dfs(current: str, path: List[str], transfers: int, visited_edges: Set[Tuple[str, str]]):
+        def dfs(current: str, path: List[str], transfers: int, visited_stations: Set[str], visited_edges: Set[Tuple[str, str]]):
             """深度优先搜索
             Args:
                 current: 当前站点
                 path: 当前路径
                 transfers: 当前换乘次数
+                visited_stations: 已访问的站点
                 visited_edges: 已访问的边（站点对）
             """
             nonlocal min_transfers_found
             
-            if transfers >= min_transfers_found:
+            # 如果当前换乘次数已经超过已知的最少换乘次数，剪枝
+            if transfers > min_transfers_found:
                 return
             
             if current == end:
-                min_transfers_found = transfers
-                all_paths.append(path.copy())
+                if transfers < min_transfers_found:
+                    min_transfers_found = transfers
+                    all_paths.clear()  # 清空之前的路径
+                if transfers == min_transfers_found:
+                    all_paths.append(path.copy())
                 return
             
             current_station = self.stations[current]
@@ -81,6 +89,10 @@ class SubwayPlanner:
 
             # 获取所有可能的下一站
             for next_station in current_station.adjacent_stations:
+                # 避免重复访问同一个站点
+                if next_station in visited_stations:
+                    continue
+                    
                 # 创建边标识（按字母顺序排序以确保唯一性）
                 edge = tuple(sorted([current, next_station]))
                 
@@ -95,22 +107,29 @@ class SubwayPlanner:
                 new_transfers = transfers
                 if current_line and next_line != current_line:
                     new_transfers += 1
-                    if new_transfers >= min_transfers_found:
+                    # 如果换乘次数已经超过已知的最少换乘次数，剪枝
+                    if new_transfers > min_transfers_found:
                         continue
                 
+                # 创建新的集合，避免修改原始集合
+                new_visited_stations = set(visited_stations)
+                new_visited_edges = set(visited_edges)
+                
                 path.append(next_station)
-                visited_edges.add(edge)
-                dfs(next_station, path, new_transfers, visited_edges)
-                visited_edges.remove(edge)
+                new_visited_stations.add(next_station)
+                new_visited_edges.add(edge)
+                dfs(next_station, path, new_transfers, new_visited_stations, new_visited_edges)
                 path.pop()
 
         # 开始搜索
-        dfs(start, [start], 0, set())
+        initial_visited_stations = {start}
+        initial_visited_edges = set()
+        dfs(start, [start], 0, initial_visited_stations, initial_visited_edges)
 
         if not all_paths:
-            return None, None, None
+            return None
 
-        # 计算每条路径的换乘次数和时间
+        # 计算每条路径的详细信息
         path_details = []
         for path in all_paths:
             transfers = self._count_transfers(path)
@@ -133,17 +152,13 @@ class SubwayPlanner:
                     if prev_line != line:
                         total_time += 5
             
-            path_details.append((path, transfers, total_time))
+            lines = self._get_path_lines(path)
+            path_details.append((path, transfers, lines, total_time))
 
-        # 找出换乘次数最少的路径
-        min_transfers = min(details[1] for details in path_details)
-        min_transfer_paths = [details for details in path_details if details[1] == min_transfers]
+        # 按时间排序
+        path_details.sort(key=lambda x: x[3])
         
-        # 在换乘次数相同的路径中选择时间最短的
-        best_path, transfers, _ = min(min_transfer_paths, key=lambda x: x[2])
-        lines = self._get_path_lines(best_path)
-
-        return best_path, transfers, lines
+        return path_details
 
     def _count_transfers(self, path: List[str]) -> int:
         """计算给定路径的换乘次数"""
@@ -301,4 +316,4 @@ if __name__ == "__main__":
     # 测试八里桥到天宫院的路径
     start = "八里桥"
     end = "天宫院"
-    path, transfers, lines = planner.find_least_transfers_path(start, end) 
+    path_details = planner.find_least_transfers_path(start, end) 
