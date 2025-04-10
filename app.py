@@ -90,6 +90,48 @@ def extend_line():
 def get_subway_data():
     return jsonify(system.get_system_data())
 
+# 获取线路发车时间信息
+@app.route('/departure_times/<line_id>', methods=['GET'])
+def get_departure_times(line_id):
+    """获取指定线路的所有发车时间信息"""
+    try:
+        departure_times = system.get_departure_times(line_id)
+        return jsonify({
+            'success': True,
+            'line_id': line_id,
+            'departure_times': departure_times
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+# 获取站点发车时间信息
+@app.route('/departure_time', methods=['GET'])
+def get_station_departure_time():
+    """获取指定线路指定站点的发车时间信息"""
+    try:
+        line_id = request.args.get('line_id')
+        station = request.args.get('station')
+        
+        if not line_id or not station:
+            return jsonify({'success': False, 'message': '请提供线路ID和站点名称'}), 400
+            
+        departure_time = system.get_station_departure_time(line_id, station)
+        
+        if departure_time:
+            return jsonify({
+                'success': True,
+                'line_id': line_id,
+                'station': station,
+                'departure_time': departure_time
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'未找到{line_id}线路{station}站的发车时间信息'
+            }), 404
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
 @app.route('/stations', methods=['GET'])
 def get_stations():
     """获取所有站点信息"""

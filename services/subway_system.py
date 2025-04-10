@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from models.station import Station
 from models.line import Line
 from services.subway_editor import SubwayEditor
@@ -21,6 +21,33 @@ class SubwaySystem:
                 'stations': line.stations
             }
         return data
+
+    def get_departure_times(self, line_id: str) -> Dict[str, str]:
+        """获取指定线路所有站点的发车时间
+        
+        Args:
+            line_id: 线路ID
+            
+        Returns:
+            Dict[str, str]: 所有站点的发车时间字典，如果线路不存在则返回空字典
+        """
+        if line_id in self.lines:
+            return self.lines[line_id].get_all_start_times()
+        return {}
+        
+    def get_station_departure_time(self, line_id: str, station: str) -> Optional[str]:
+        """获取指定线路指定站点的发车时间
+        
+        Args:
+            line_id: 线路ID
+            station: 站点名称
+            
+        Returns:
+            Optional[str]: 发车时间字符串，如果线路或站点不存在则返回None
+        """
+        if line_id in self.lines:
+            return self.lines[line_id].get_start_time(station)
+        return None
 
     def calculate_fare(self, distance: float) -> float:
         """计算票价"""

@@ -2,6 +2,7 @@ import json
 from typing import Dict, Tuple
 from models.station import Station
 from models.line import Line
+import os
 
 def initialize_from_json(line_speed_file: str) -> Tuple[Dict[str, Station], Dict[str, Line]]:
     """从JSON文件初始化地铁系统"""
@@ -63,4 +64,46 @@ def initialize_from_json(line_speed_file: str) -> Tuple[Dict[str, Station], Dict
             if "大钟寺" in line.stations and line.stations.index("大钟寺") == 0:
                 line.stations = line.stations[1:]
     
+    # 加载发车时间数据
+    load_departure_times(lines)
+    
     return stations, lines
+
+def load_departure_times(lines: Dict[str, Line]) -> None:
+    """加载发车时间数据到相应的Line对象中
+    
+    Args:
+        lines: 包含所有线路对象的字典
+    """
+    try:
+        # 检查发车时间数据文件是否存在
+        departure_times_file = 'resources/data/parsed_departure_times.json'
+        if not os.path.exists(departure_times_file):
+            print(f"警告: 发车时间数据文件 {departure_times_file} 不存在")
+            return
+        
+        # 读取发车时间数据
+        with open(departure_times_file, 'r', encoding='utf-8') as f:
+            departure_data = json.load(f)
+        
+        # 只解析工作日数据作为每天的发车时间
+        weekday_key = "工作日"
+        if weekday_key in departure_data:
+            weekday_data = departure_data[weekday_key]
+            
+            # 遍历所有线路
+            for line_id, line_obj in lines.items():
+                if line_id in weekday_data:
+                    line_data = weekday_data[line_id]
+                    
+                    # 遍历所有方向
+                    for direction, stations_data in line_data.items():
+                        # 遍历所有始发站
+                        for station_name, departure_times in stations_data.items():
+                            # 保存所有发车时间
+                            for time_id, time_value in departure_times.items():
+                                line_obj.add_start_time(station_name, time_id, time_value)
+        
+        print("发车时间数据加载完成")
+    except Exception as e:
+        print(f"加载发车时间数据时出错: {str(e)}")

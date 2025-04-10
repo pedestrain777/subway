@@ -1,10 +1,10 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 from dataclasses import dataclass
 
 @dataclass
 class Line:
     line_id: str  # 线路编号
-    start_times: Dict[str, str]  # 不同始发站的发车时间 {station_name: time}
+    start_times: Dict[str, Dict[str, str]]  # 不同始发站的发车时间 {station_name: {time_id: time}}
     speed: float  # 线路速度（km/h）
     stations: List[str]  # 正向站点列表
     reverse_stations: List[str]  # 反向站点列表
@@ -21,8 +21,49 @@ class Line:
         self.stations = []
         self.reverse_stations = []
 
-    def add_start_time(self, station: str, time: str):
-        self.start_times[station] = time
+    def add_start_time(self, station: str, time_id: str, time: str):
+        """添加站点的发车时间
+        
+        Args:
+            station: 站点名称
+            time_id: 发车时间编号
+            time: 发车时间（格式：HH:MM）
+        """
+        if station not in self.start_times:
+            self.start_times[station] = {}
+        self.start_times[station][time_id] = time
+        
+    def get_start_times(self, station: str) -> Dict[str, str]:
+        """获取指定站点的所有发车时间
+        
+        Args:
+            station: 站点名称
+            
+        Returns:
+            Dict[str, str]: 发车时间字典 {time_id: time}，如果站点不存在则返回空字典
+        """
+        return self.start_times.get(station, {})
+        
+    def get_all_start_times(self) -> Dict[str, Dict[str, str]]:
+        """获取所有站点的发车时间
+        
+        Returns:
+            Dict[str, Dict[str, str]]: 所有站点的发车时间字典
+        """
+        return self.start_times.copy()
+
+    def get_earliest_start_time(self, station: str) -> Optional[str]:
+        """获取指定站点的最早发车时间
+        
+        Args:
+            station: 站点名称
+            
+        Returns:
+            Optional[str]: 最早发车时间，如果站点不存在则返回None
+        """
+        if station in self.start_times and self.start_times[station]:
+            return min(self.start_times[station].values())
+        return None
 
     def set_stations(self, stations: List[str]):
         self.stations = stations
