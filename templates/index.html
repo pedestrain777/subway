@@ -185,17 +185,20 @@
                             <div class="d-flex gap-3 align-items-center">
                                 <div class="input-group" style="max-width: 200px;">
                                     <span class="input-group-text">起点</span>
-                                    <input type="text" class="form-control" id="start" readonly placeholder="点击站点选择起点">
+                                    <input type="text" class="form-control" id="start" list="stationList" placeholder="点击或输入站点名">
                                 </div>
                                 <div class="input-group" style="max-width: 200px;">
                                     <span class="input-group-text">终点</span>
-                                    <input type="text" class="form-control" id="end" readonly placeholder="点击站点选择终点">
+                                    <input type="text" class="form-control" id="end" list="stationList" placeholder="点击或输入站点名">
                                 </div>
-                                <button id="resetSelection" class="btn btn-outline-secondary" disabled>重置</button>
+                                <button id="resetSelection" class="btn btn-outline-secondary">重置</button>
                             </div>
                             <div class="mt-2">
                                 <small id="selectionStatus" class="text-muted">请选择或输入起点站</small>
                             </div>
+                            <!-- 添加站点列表数据 -->
+                            <datalist id="stationList">
+                            </datalist>
                         </div>
                         <div class="col-md-4 text-end">
                             <div class="btn-group">

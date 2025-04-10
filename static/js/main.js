@@ -77,4 +77,88 @@ document.addEventListener('DOMContentLoaded', function() {
             handleStationClick(this.textContent.trim());
         });
     });
+
+    // 初始化站点列表
+    initializeStationList();
+});
+
+// 初始化站点列表
+function initializeStationList() {
+    const stationList = document.getElementById('stationList');
+    const stations = new Set();
+
+    // 从所有线路中收集站点
+    Object.values(subwayData).forEach(line => {
+        line.stations.forEach(station => {
+            stations.add(station);
+        });
+    });
+
+    // 将站点添加到datalist中
+    stations.forEach(station => {
+        const option = document.createElement('option');
+        option.value = station;
+        stationList.appendChild(option);
+    });
+}
+
+// 处理站点输入
+document.getElementById('start').addEventListener('input', function(e) {
+    handleStationInput(e.target);
+});
+
+document.getElementById('end').addEventListener('input', function(e) {
+    handleStationInput(e.target);
+});
+
+function handleStationInput(input) {
+    const stations = new Set();
+    Object.values(subwayData).forEach(line => {
+        line.stations.forEach(station => {
+            stations.add(station);
+        });
+    });
+
+    // 验证输入的站点是否存在
+    if (input.value && !stations.has(input.value)) {
+        input.classList.add('is-invalid');
+        updateSelectionStatus('请输入有效的站点名称');
+    } else {
+        input.classList.remove('is-invalid');
+        updateSelectionUI();
+    }
+}
+
+// 更新选择状态UI
+function updateSelectionUI() {
+    const start = document.getElementById('start').value;
+    const end = document.getElementById('end').value;
+    const resetBtn = document.getElementById('resetSelection');
+    const status = document.getElementById('selectionStatus');
+
+    if (start && end) {
+        resetBtn.disabled = false;
+        status.textContent = '已选择起点和终点站';
+        document.querySelectorAll('.route-btn').forEach(btn => btn.disabled = false);
+    } else if (start) {
+        resetBtn.disabled = false;
+        status.textContent = '请选择终点站';
+        document.querySelectorAll('.route-btn').forEach(btn => btn.disabled = true);
+    } else if (end) {
+        resetBtn.disabled = false;
+        status.textContent = '请选择起点站';
+        document.querySelectorAll('.route-btn').forEach(btn => btn.disabled = true);
+    } else {
+        resetBtn.disabled = true;
+        status.textContent = '请选择或输入起点站';
+        document.querySelectorAll('.route-btn').forEach(btn => btn.disabled = true);
+    }
+}
+
+// 重置选择
+document.getElementById('resetSelection').addEventListener('click', function() {
+    document.getElementById('start').value = '';
+    document.getElementById('end').value = '';
+    document.querySelectorAll('.station-btn').forEach(btn => btn.classList.remove('selected'));
+    updateSelectionUI();
 }); 
