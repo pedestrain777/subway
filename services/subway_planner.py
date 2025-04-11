@@ -70,6 +70,10 @@ class SubwayPlanner:
             
         return common_lines
 
+    def load_lines(self):
+        # 实现加载线路的逻辑
+        pass
+
     def find_least_transfers_path(self, start: str, end: str) -> List[Tuple[List[str], int, List[str], float]]:
         """查找最少换乘路径，返回所有最短换乘路径并按时间排序
         
@@ -128,11 +132,12 @@ class SubwayPlanner:
         all_paths = []
         min_transfers_found = float('inf')
         
-        def dfs(current: str, path: List[str], transfers: int, visited_stations: Set[str], visited_edges: Set[Tuple[str, str]], current_line: str = None):
+        def dfs(current: str, path: List[str], lines_used: List[str], transfers: int, visited_stations: Set[str], visited_edges: Set[Tuple[str, str]], current_line: str = None):
             """深度优先搜索
             Args:
                 current: 当前站点
                 path: 当前路径
+                lines_used: 当前使用的线路
                 transfers: 当前换乘次数
                 visited_stations: 已访问的站点
                 visited_edges: 已访问的边（站点对）
@@ -149,7 +154,7 @@ class SubwayPlanner:
                     min_transfers_found = transfers
                     all_paths.clear()  # 清空之前的路径
                 if transfers == min_transfers_found:
-                    all_paths.append((path.copy(), current_line))
+                    all_paths.append((path.copy(), transfers, lines_used.copy()))
                 return
             
             current_station = self.stations[current]
@@ -191,32 +196,34 @@ class SubwayPlanner:
                         if new_transfers > min_transfers_found:
                             continue
                     
-                    dfs(next_station, path, new_transfers, new_visited_stations, new_visited_edges, next_line)
+                    # 添加当前使用的线路
+                    lines_used.append(next_line)
+                    
+                    dfs(next_station, path, lines_used, new_transfers, new_visited_stations, new_visited_edges, next_line)
+                    
+                    # 回溯时移除当前使用的线路
+                    lines_used.pop()
                 
                 path.pop()
  
         # 开始搜索
         initial_visited_stations = {start}
         initial_visited_edges = set()
-        dfs(start, [start], 0, initial_visited_stations, initial_visited_edges, None)
+        dfs(start, [start], [], 0, initial_visited_stations, initial_visited_edges, None)
  
         if not all_paths:
             return None
  
         # 计算每条路径的详细信息
         path_details = []
-        for path, final_line in all_paths:
-            # 重新计算路径中每段的线路选择，选择最优线路（尽量减少换乘）
-            optimized_lines = self._optimize_path_lines(path)
-            transfers = len(optimized_lines) - 1  # 线路数量减1就是换乘次数
-            
+        for path, transfers, lines_used in all_paths:
             # 计算总时间
             total_time = 0
             for i in range(len(path)-1):
                 current = path[i]
                 next_station = path[i+1]
                 distance = self.stations[current].adjacent_stations[next_station]
-                line = optimized_lines[i]  # 使用优化后的线路
+                line = lines_used[i]  # 使用DFS中记录的线路
                 
                 # 计算行驶时间
                 travel_time = self.calculate_travel_time(distance, self.lines[line].speed)
@@ -227,79 +234,21 @@ class SubwayPlanner:
                     total_time += 1
                 
                 # 如果需要换乘，添加换乘时间
-                if i > 0 and optimized_lines[i-1] != line:
+                if i > 0 and lines_used[i-1] != line:
                     total_time += 5
             
-            path_details.append((path, transfers, optimized_lines, total_time))
+            path_details.append((path, transfers, lines_used, total_time))
  
         # 按时间排序
         path_details.sort(key=lambda x: x[3])
                 
         return path_details
+    
+    def build_graph(self):
+        # 实现构建图的逻辑
+        pass
 
-    def _optimize_path_lines(self, path: List[str]) -> List[str]:
-        """优化路径的线路选择，尽量减少换乘次数
-        
-        Args:
-            path: 站点路径列表
-            
-        Returns:
-            List[str]: 优化后的每段线路列表
-        """
-        if len(path) <= 1:
-            return []
-            
-        # 获取路径中每段可用的线路集合
-        segment_lines = []
-        for i in range(len(path)-1):
-            lines = self.get_line_between_stations(path[i], path[i+1])
-            segment_lines.append(lines)
-        
-        # 现在我们使用动态规划找出最优的线路组合
-        # dp[i][line] 表示到第i段，使用line线路的最小换乘次数
-        n = len(segment_lines)
-        dp = {}
-        
-        # 初始化第一段
-        for line in segment_lines[0]:
-            dp[(0, line)] = 0
-        
-        # 填充dp表
-        for i in range(1, n):
-            for current_line in segment_lines[i]:
-                dp[(i, current_line)] = float('inf')
-                for prev_line in segment_lines[i-1]:
-                    cost = dp.get((i-1, prev_line), float('inf'))
-                    if current_line != prev_line:
-                        cost += 1  # 换乘
-                    dp[(i, current_line)] = min(dp[(i, current_line)], cost)
-        
-        # 找出最后一段的最优线路
-        min_transfers = float('inf')
-        best_last_line = None
-        for line in segment_lines[-1]:
-            if dp.get((n-1, line), float('inf')) < min_transfers:
-                min_transfers = dp.get((n-1, line), float('inf'))
-                best_last_line = line
-        
-        # 回溯找出整个路径的最优线路
-        optimal_lines = [best_last_line]
-        for i in range(n-1, 0, -1):
-            best_prev_line = None
-            min_cost = float('inf')
-            current_line = optimal_lines[0]
-            
-            for prev_line in segment_lines[i-1]:
-                cost = dp.get((i-1, prev_line), float('inf'))
-                if current_line != prev_line:
-                    cost += 1
-                if cost < min_cost:
-                    min_cost = cost
-                    best_prev_line = prev_line
-            
-            optimal_lines.insert(0, best_prev_line)
-        
-        return optimal_lines
+
 
     def find_shortest_time_path(self, start: str, end: str) -> Tuple[List[str], float, List[str]]:
         """查找最短时间路径
@@ -387,6 +336,10 @@ class SubwayPlanner:
             
         return details
 
+    def load_stations(self):
+        # 实现加载站点的逻辑
+        pass
+
     def load_departure_times(self, lines: Dict[str, Line]):
         """从JSON文件加载发车时间数据"""
         try:
@@ -410,31 +363,4 @@ class SubwayPlanner:
             print(f"加载发车时间数据失败: {str(e)}")
             raise
 
-    def build_graph(self):
-        # 实现构建图的逻辑
-        pass
-
-    def load_stations(self):
-        # 实现加载站点的逻辑
-        pass
-
-    def load_lines(self):
-        # 实现加载线路的逻辑
-        pass
-
-if __name__ == "__main__":
-    import sys
-    import os
-    # 添加项目根目录到 Python 路径
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    
-    from utils.initializer import initialize_from_json
-    
-    # 初始化地铁系统
-    stations, lines = initialize_from_json('resources/data/line_speed_final.json')
-    planner = SubwayPlanner(stations, lines)
-    
-    # 测试八里桥到天宫院的路径
-    start = "八里桥"
-    end = "天宫院"
-    path_details = planner.find_least_transfers_path(start, end) 
+   
