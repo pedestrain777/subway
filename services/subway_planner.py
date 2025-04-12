@@ -5,6 +5,7 @@ from models.line import Line
 import json
 import networkx as nx
 from collections import deque
+import random
 
 class SubwayPlanner:
     def __init__(self, stations: Dict[str, Station] = None, lines: Dict[str, Line] = None):
@@ -24,6 +25,9 @@ class SubwayPlanner:
         
         # 构建图
         self.build_graph()
+        
+        # 用于存储每条路线的等待时间
+        self.route_wait_times = {}
 
     def _add_circle_line_connections(self):
         """为环形线路添加首尾站点的连接"""
@@ -248,8 +252,6 @@ class SubwayPlanner:
         # 实现构建图的逻辑
         pass
 
-
-
     def find_shortest_time_path(self, start: str, end: str) -> Tuple[List[str], float, List[str]]:
         """查找最短时间路径
         
@@ -267,6 +269,21 @@ class SubwayPlanner:
         # find_least_transfers_path已经按时间排序，直接取第一条就是时间最短的
         path, transfers, lines, total_time = path_details[0]
         
+        # 生成起点-终点的唯一标识
+        route_key = f"{start}-{end}"
+        
+        # 添加随机等车时间，并实现递减逻辑
+        if route_key not in self.route_wait_times:
+            # 第一次查询这条路线，生成0到4分钟的随机等待时间
+            self.route_wait_times[route_key] = random.uniform(0, 4)
+        else:
+            # 后续查询，等待时间递减（但不低于0）
+            self.route_wait_times[route_key] = max(0, self.route_wait_times[route_key] * 0.8)
+        
+        # 将等待时间加到总时间上
+        wait_time = self.route_wait_times[route_key]
+        total_time += wait_time
+        
         return path, total_time, lines
 
     def calculate_route_details(self, path: List[str], lines: List[str] = None) -> Dict:
@@ -275,7 +292,8 @@ class SubwayPlanner:
             "total_distance": 0,
             "total_time": 0,
             "transfers": 0,
-            "segments": []
+            "segments": [],
+            "wait_time": 0  # 添加等车时间字段
         }
         
         if len(path) <= 1:
@@ -286,6 +304,12 @@ class SubwayPlanner:
             lines = self._optimize_path_lines(path)
             
         current_line = None
+        
+        # 计算等车时间
+        route_key = f"{path[0]}-{path[-1]}"
+        if route_key in self.route_wait_times:
+            details["wait_time"] = self.route_wait_times[route_key]
+            details["total_time"] += details["wait_time"]  # 将等车时间加入总时间
         
         for i in range(len(path)-1):
             current = path[i]
