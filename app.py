@@ -25,8 +25,28 @@ def query():
         return jsonify({"error": "请提供起点和终点站"}), 400
         
     try:
-        result = system.plan_route(start, end, mode)
-        return jsonify({"result": result})
+        # 如果是HTML格式的结果（用于原有页面）
+        html_result = system.plan_route(start, end, mode)
+        
+        # 获取路径数据详情（用于地图显示）
+        path_data = system.get_route_details(start, end, mode)
+        
+        # 对于最少换乘模式，获取所有可能的路线
+        all_paths = None
+        if mode == 'transfers':
+            all_paths = system.get_all_transfer_routes(start, end)
+        
+        # 合并返回结果
+        return jsonify({
+            "result": html_result,
+            "path": path_data.get("path", []),
+            "time": path_data.get("time", 0),
+            "transfers": path_data.get("transfers", 0),
+            "lines": path_data.get("lines", []),
+            "wait_time": path_data.get("wait_time", 0),
+            "segments": path_data.get("segments", []),
+            "all_paths": all_paths
+        })
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 

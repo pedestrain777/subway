@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>北京地铁线路查询系统</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <style>
         body {
             background-color: #f5f5f5;
@@ -161,6 +165,210 @@
         .form-control.is-invalid + .error-feedback {
             display: block;
         }
+        /* 地图容器样式 */
+        #subway-map {
+            height: 600px; 
+            width: 100%; 
+            margin-top: 20px;
+            position: relative;
+            z-index: 1;
+        }
+        /* 确保tab-pane使用flex布局，使地图能够撑满容器 */
+        .tab-pane {
+            display: flex;
+            flex-direction: column;
+        }
+        /* 让地图容器在垂直方向上撑满可用空间 */
+        #map {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        /* 站点标签样式 */
+        .station-label {
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 1px solid #0056b3;
+            padding: 2px 4px;
+            font-size: 10px;
+            white-space: nowrap;
+            border-radius: 2px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        /* 地图信息面板 */
+        #mapSelectionStatus {
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            max-width: 100%;
+            margin-top: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        /* 地图控制面板 */
+        .map-control-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+        }
+        .route-info-container {
+            max-height: 100px;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            margin-top: 10px;
+        }
+        /* 美化滚动条 */
+        .route-info-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .route-info-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .route-info-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        .route-info-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* 路线信息样式 */
+        .map-route-info {
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        .map-route-info div {
+            margin-bottom: 6px;
+        }
+        /* 路线路径显示 */
+        .map-route-info div:first-child {
+            white-space: nowrap;
+            overflow-x: auto;
+            padding-bottom: 6px;
+        }
+        /* 可滚动内容容器 */
+        .scrollable-content {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        /* 美化所有滚动条 */
+        .scrollable-content::-webkit-scrollbar,
+        .route-info-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .scrollable-content::-webkit-scrollbar-track,
+        .route-info-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .scrollable-content::-webkit-scrollbar-thumb,
+        .route-info-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        .scrollable-content::-webkit-scrollbar-thumb:hover,
+        .route-info-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* 多方案路线样式 */
+        .route-plan {
+            border-left: 4px solid #007bff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        .route-plan:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        .route-plan:nth-child(2n) {
+            border-left-color: #28a745;
+        }
+        .route-plan:nth-child(3n) {
+            border-left-color: #fd7e14;
+        }
+        .route-plan h5 {
+            color: #007bff;
+            font-weight: bold;
+        }
+        /* 路线方案标识样式 */
+        .route-badge {
+            font-size: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 30px;
+            color: white !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .route-header {
+            position: relative;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        /* 地图路线结果容器 */
+        .map-route-container {
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            margin-top: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #007bff;
+        }
+        /* 地图多路线方案容器 */
+        .map-route-results-container {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            display: none; /* 默认隐藏，有结果时显示 */
+        }
+        /* 地图路线方案项 */
+        .map-route-plan {
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+            padding: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #007bff;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .map-route-plan:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .map-route-plan.active {
+            box-shadow: 0 0 0 2px #007bff, 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .map-route-badge {
+            font-size: 0.9rem;
+            padding: 0.3rem 0.8rem;
+            border-radius: 30px;
+            color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            margin-right: 8px;
+        }
+        .map-route-lines {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 8px;
+        }
+        .map-line-badge {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -173,6 +381,9 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="edit-tab" data-bs-toggle="tab" data-bs-target="#edit" type="button">编辑线路</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="map-tab" data-bs-toggle="tab" data-bs-target="#map" type="button">地图查询</button>
             </li>
         </ul>
 
@@ -265,6 +476,53 @@
                     </form>
                 </div>
             </div>
+
+            <!-- 添加地图查询面板 -->
+            <div class="tab-pane fade" id="map">
+                <div class="control-panel">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <div class="d-flex gap-3 align-items-center">
+                                <div class="input-group" style="max-width: 200px;">
+                                    <span class="input-group-text">起点</span>
+                                    <input type="text" class="form-control" id="map-start" list="stationList" placeholder="点击或输入站点名">
+                                </div>
+                                <div class="input-group" style="max-width: 200px;">
+                                    <span class="input-group-text">终点</span>
+                                    <input type="text" class="form-control" id="map-end" list="stationList" placeholder="点击或输入站点名">
+                                </div>
+                                <button id="mapResetSelection" class="btn btn-outline-secondary">重置</button>
+                                <button id="queryMapRoute" class="btn btn-primary">查询路线</button>
+                            </div>
+                            <div class="mt-2">
+                                <div id="mapSelectionStatus" class="route-info-container">
+                                    <small class="text-muted">请选择或输入起点站</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="btn-group">
+                                <button class="btn btn-outline-primary active" data-map-mode="time">最短时间</button>
+                                <button class="btn btn-outline-primary" data-map-mode="transfers">最少换乘</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="mapRouteResults" class="map-route-results-container">
+                    <!-- 这里将显示多个路线方案 -->
+                </div>
+                <div id="subway-map"></div>
+                <div class="map-instructions mt-3">
+                    <p class="text-muted">
+                        <small>
+                            <i class="bi bi-info-circle"></i> 
+                            使用说明: 点击地图上的站点可以设置起点和终点，第一次点击为起点，第二次点击为终点。
+                            放大地图可以查看站点名称。选择"最短时间"或"最少换乘"模式来获取不同的路线规划结果。
+                            点击路线方案可在地图上高亮显示该路线。
+                        </small>
+                    </p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -277,7 +535,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div id="routeResult" class="route-details"></div>
+                    <div id="routeResult" class="route-details scrollable-content"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
@@ -287,6 +545,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/latlng.js"></script>
+    <script src="/static/js/map.js"></script>
     <script>
         let selectedStations = [];
         let currentMode = 'time';
@@ -564,7 +824,12 @@
                     })
                 });
                 const result = await response.json();
+                
+                // 在显示模态框前更新内容
                 document.getElementById('routeResult').innerHTML = formatRouteResult(result.result);
+                document.querySelector('.modal-title').textContent = `${selectedStations[0]} → ${selectedStations[1]} 乘车方案`;
+                
+                // 显示模态框
                 routeModal.show();
             } catch (error) {
                 alert('查询失败：' + error.message);
@@ -573,12 +838,163 @@
 
         // 格式化路线结果
         function formatRouteResult(result) {
-            return result.split('\n').map(line => {
-                if (line.startsWith('乘坐')) {
-                    return `<div class="route-segment"><strong>${line}</strong></div>`;
+            // 分离路线结果的不同部分
+            const lines = result.split('\n');
+            
+            // 检查是否是最少换乘模式（包含多个路线方案）
+            const isMultipleRoutes = result.includes('最少换乘路线方案') && result.includes('路线 1');
+            
+            if (isMultipleRoutes) {
+                // 为最少换乘模式创建特殊格式
+                return formatMultipleRoutes(lines);
+            } else {
+                // 单一路线模式的原有格式化逻辑
+                const basicInfo = [];
+                const detailedRoutes = [];
+                let isDetailedSection = false;
+                
+                lines.forEach(line => {
+                    if (line.includes('详细路线:')) {
+                        isDetailedSection = true;
+                        return;
+                    }
+                    
+                    if (isDetailedSection) {
+                        detailedRoutes.push(line);
+                    } else {
+                        basicInfo.push(line);
+                    }
+                });
+                
+                // 格式化基本信息
+                const formattedBasicInfo = basicInfo.map(line => {
+                    if (line.startsWith('===')) return `<h5 class="text-center mt-2 mb-3">${line}</h5>`;
+                    return `<div>${line}</div>`;
+                }).join('');
+                
+                // 格式化详细路线
+                const formattedDetailedRoutes = detailedRoutes.map(line => {
+                    if (line.trim() === '') return '';
+                    if (line.startsWith('乘坐')) {
+                        return `<div class="route-segment"><strong>${line}</strong></div>`;
+                    }
+                    if (line.startsWith('=')) return '<hr>';
+                    return `<div class="ms-3">${line}</div>`;
+                }).join('');
+                
+                // 组合所有内容
+                return `
+                    <div class="basic-info mb-3">
+                        ${formattedBasicInfo}
+                    </div>
+                    <div class="detailed-routes">
+                        <h6>详细路线:</h6>
+                        ${formattedDetailedRoutes}
+                    </div>
+                `;
+            }
+        }
+        
+        // 格式化最少换乘的多个路线方案
+        function formatMultipleRoutes(lines) {
+            // 提取标题部分
+            const title = lines.find(line => line.includes('最少换乘路线方案'));
+            
+            // 根据路线标记分割多个路线方案
+            const routes = [];
+            let currentRoute = [];
+            let routeIndex = 0;
+            
+            lines.forEach(line => {
+                if (line.match(/={15} 路线 \d+ ={15}/)) {
+                    if (currentRoute.length > 0) {
+                        routes.push({
+                            index: routeIndex,
+                            content: currentRoute
+                        });
+                    }
+                    routeIndex = parseInt(line.match(/路线 (\d+)/)[1]);
+                    currentRoute = [line];
+                } else if (routeIndex > 0) {
+                    currentRoute.push(line);
                 }
-                return `<div>${line}</div>`;
+            });
+            
+            // 添加最后一个路线
+            if (currentRoute.length > 0) {
+                routes.push({
+                    index: routeIndex,
+                    content: currentRoute
+                });
+            }
+            
+            // 格式化每个路线方案
+            const formattedRoutes = routes.map((route, idx) => {
+                // 为每个方案确定一个颜色
+                const colors = ['#007bff', '#28a745', '#fd7e14', '#dc3545', '#6f42c1'];
+                const routeColor = colors[idx % colors.length];
+                
+                // 将每个路线方案分为基本信息和详细路线
+                const basicInfo = [];
+                const detailedRoutes = [];
+                let isDetailedSection = false;
+                
+                route.content.forEach(line => {
+                    if (line.includes('详细路线:')) {
+                        isDetailedSection = true;
+                        return;
+                    }
+                    
+                    if (isDetailedSection) {
+                        detailedRoutes.push(line);
+                    } else {
+                        basicInfo.push(line);
+                    }
+                });
+                
+                // 格式化基本信息
+                const formattedBasicInfo = basicInfo.map(line => {
+                    if (line.match(/={15} 路线 \d+ ={15}/)) {
+                        return `
+                            <div class="route-header" style="border-color: ${routeColor}">
+                                <h5 class="text-center mt-2 mb-3" style="color: ${routeColor}">
+                                    <span class="badge bg-secondary route-badge" style="background-color: ${routeColor} !important;">方案 ${route.index}</span>
+                                </h5>
+                            </div>
+                        `;
+                    }
+                    return `<div>${line}</div>`;
+                }).join('');
+                
+                // 格式化详细路线
+                const formattedDetailedRoutes = detailedRoutes.map(line => {
+                    if (line.trim() === '') return '';
+                    if (line.startsWith('乘坐')) {
+                        return `<div class="route-segment"><strong>${line}</strong></div>`;
+                    }
+                    if (line.startsWith('=')) return '<hr>';
+                    return `<div class="ms-3">${line}</div>`;
+                }).join('');
+                
+                // 组合该路线方案的内容
+                return `
+                    <div class="route-plan mb-4 p-3 bg-light rounded" style="border-left-color: ${routeColor}">
+                        <div class="basic-info mb-3">
+                            ${formattedBasicInfo}
+                        </div>
+                        <div class="detailed-routes">
+                            <h6>详细路线:</h6>
+                            ${formattedDetailedRoutes}
+                        </div>
+                    </div>
+                `;
             }).join('');
+            
+            // 返回标题和所有路线方案
+            return `
+                <h4 class="text-center mb-3">${title || '最少换乘路线方案'}</h4>
+                ${formattedRoutes}
+            `;
         }
 
         // 显示编辑表单

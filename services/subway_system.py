@@ -110,4 +110,94 @@ class SubwaySystem:
                 return "\n".join(result)
                 
         except ValueError as e:
-            return f"错误：{str(e)}" 
+            return f"错误：{str(e)}"
+    
+    def get_route_details(self, start: str, end: str, mode: str = "time") -> dict:
+        """获取路线详细信息，用于地图显示
+        
+        Args:
+            start: 起点站
+            end: 终点站
+            mode: 规划模式，"time"为最短时间，"transfers"为最少换乘
+            
+        Returns:
+            dict: 包含路线详细信息的字典
+        """
+        try:
+            if mode == "time":
+                path, total_time, lines = self.planner.find_shortest_time_path(start, end)
+                if not path:
+                    return {"error": "未找到可行路线"}
+                
+                details = self.planner.calculate_route_details(path, lines)
+                
+                return {
+                    "path": path,
+                    "time": total_time,
+                    "lines": lines,
+                    "transfers": details.get("transfers", 0),
+                    "total_distance": details.get("total_distance", 0),
+                    "wait_time": details.get("wait_time", 0),
+                    "segments": details.get("segments", []),
+                    "fare": self.calculate_fare(details.get("total_distance", 0))
+                }
+            else:
+                paths = self.planner.find_least_transfers_path(start, end)
+                if not paths:
+                    return {"error": "未找到可行路线"}
+                
+                # 使用第一条路径（最少换乘且时间最短的路径）
+                path, transfers, lines, total_time = paths[0]
+                details = self.planner.calculate_route_details(path, lines)
+                
+                return {
+                    "path": path,
+                    "time": total_time,
+                    "lines": lines,
+                    "transfers": transfers,
+                    "total_distance": details.get("total_distance", 0),
+                    "wait_time": details.get("wait_time", 0),
+                    "segments": details.get("segments", []),
+                    "fare": self.calculate_fare(details.get("total_distance", 0))
+                }
+                
+        except ValueError as e:
+            return {"error": str(e)}
+            
+    def get_all_transfer_routes(self, start: str, end: str) -> list:
+        """获取所有最少换乘路线方案
+        
+        Args:
+            start: 起点站
+            end: 终点站
+            
+        Returns:
+            list: 包含所有最少换乘路线方案的列表
+        """
+        try:
+            paths = self.planner.find_least_transfers_path(start, end)
+            if not paths:
+                return []
+                
+            result = []
+            for path, transfers, lines, total_time in paths:
+                details = self.planner.calculate_route_details(path, lines)
+                
+                result.append({
+                    "path": path,
+                    "time": total_time,
+                    "lines": lines,
+                    "transfers": transfers,
+                    "total_distance": details.get("total_distance", 0),
+                    "wait_time": details.get("wait_time", 0),
+                    "segments": details.get("segments", []),
+                    "fare": self.calculate_fare(details.get("total_distance", 0))
+                })
+            
+            # 按时间排序
+            result.sort(key=lambda x: x["time"])
+            
+            return result
+        except ValueError as e:
+            print(f"获取所有最少换乘路线失败: {str(e)}")
+            return [] 
