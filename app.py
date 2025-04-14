@@ -123,17 +123,29 @@ def add_custom_station():
         from models.station import Station
         new_station = Station(new_station_name)
         
+        # 保存站点经纬度信息（用于前端显示）
+        new_station.lat = station_data['lat']
+        new_station.lng = station_data['lng']
+        
         # 如果是新线路，则创建线路
         if is_new_line:
-            from models.line import Line
-            new_line = Line(line_data['name'], float(line_data['speed']))
-            new_line.stations = [new_station_name]
-            
-            # 添加到系统
-            system.lines[line_data['name']] = new_line
-            new_station.add_line(line_data['name'])
+            # 先将站点添加到系统中
             system.stations[new_station_name] = new_station
             
+            # 使用编辑器创建新线路
+            try:
+                system.editor.create_new_line(
+                    line_id=line_data['name'],
+                    station_name=new_station_name,
+                    speed=float(line_data['speed'])
+                )
+                
+                print(f"创建新线路 {line_data['name']}，速度 {line_data['speed']}km/h，起始站点 {new_station_name}")
+            except ValueError as e:
+                # 如果线路已存在，尝试添加到现有线路
+                print(f"创建线路失败：{str(e)}，尝试添加到现有线路")
+                is_new_line = False
+                
             # 处理与其他站点的连接（如果有）
             if connections and isinstance(connections, dict) and len(connections) > 0:
                 for connect_station, distance in connections.items():
@@ -142,53 +154,136 @@ def add_custom_station():
                         new_station.add_adjacent_station(connect_station, float(distance))
                         system.stations[connect_station].add_adjacent_station(new_station_name, float(distance))
                         print(f"已连接新线路站点 {new_station_name} 和 {connect_station}，距离 {distance} 米")
-        else:
-            # 如果是已有线路，则连接到线路站点
-            line_name = line_data['name']
-            line_stations = data.get('lineStations', [])
+        
+        # 如果不是新线路或者创建新线路失败
+        if not is_new_line:
+            # 先将站点添加到系统中
+            system.stations[new_station_name] = new_station
             
-            if line_name in system.lines:
-                # 添加站点到线路
-                system.lines[line_name].stations = line_stations
-                
-                # 添加站点到系统
-                new_station.add_line(line_name)
-                system.stations[new_station_name] = new_station
-
-                # 处理连接信息 - 使用用户提供的距离
-                if connections and isinstance(connections, dict) and len(connections) > 0:
-                    print(f"收到站点连接信息: {connections}")
-                    for connect_station, distance in connections.items():
-                        if connect_station in system.stations:
-                            # 建立连接关系，使用用户提供的距离
+            # 处理连接信息 - 使用用户提供的距离
+            line_name = line_data['name']
+            
+            if connections and isinstance(connections, dict) and len(connections) > 0:
+                # 遍历连接站点
+                for connect_station, distance in connections.items():
+                    if connect_station in system.stations:
+                        try:
+                            # 使用编辑器添加站点到线路
+                            system.editor.add_station_to_line(
+                                line_id=line_name,
+                                station_name=new_station_name,
+                                connected_station=connect_station,
+                                distance=float(distance)
+                            )
+                            
+                            print(f"已使用编辑器连接站点 {new_station_name} 和 {connect_station}，距离 {distance} 米")
+                            
+                            # 只处理第一个连接站点，因为添加到线路会自动管理线路上站点的连接关系
+                            break
+                        except ValueError as e:
+                            # 如果添加失败，直接建立相邻关系
+                            print(f"添加站点到线路失败：{str(e)}，直接建立连接关系")
+                            new_station.add_line(line_name)
                             new_station.add_adjacent_station(connect_station, float(distance))
                             system.stations[connect_station].add_adjacent_station(new_station_name, float(distance))
-                            print(f"已连接站点 {new_station_name} 和 {connect_station}，距离 {distance} 米")
+                            
+                            # 尝试更新线路站点列表
+                            if line_name in system.lines:
+                                # 查找连接站点在线路中的位置
+                                try:
+                                    connect_idx = system.lines[line_name].stations.index(connect_station)
+                                    
+                                    # 如果连接站点是线路上的中间站点，则需要删除与其相邻站点的直接连接
+                                    if 0 < connect_idx < len(system.lines[line_name].stations) - 1:
+                                        prev_station = system.lines[line_name].stations[connect_idx - 1]
+                                        next_station = system.lines[line_name].stations[connect_idx + 1]
+                                        
+                                        # 只处理与连接站相邻的站点
+                                        if connect_idx + 1 < len(system.lines[line_name].stations):
+                                            next_station = system.lines[line_name].stations[connect_idx + 1]
+                                            
+                                            # 删除直接连接
+                                            if next_station in system.stations[connect_station].adjacent_stations:
+                                                print(f"删除直接连接: {connect_station} -> {next_station}")
+                                                
+                                                # 删除站点间的连接
+                                                if next_station in system.stations[connect_station].adjacent_stations:
+                                                    del system.stations[connect_station].adjacent_stations[next_station]
+                                                if connect_station in system.stations[next_station].adjacent_stations:
+                                                    del system.stations[next_station].adjacent_stations[connect_station]
+                                                
+                                                # 建立新站点与下一站点的连接
+                                                next_distance = float(distance)  # 简化处理，使用相同的距离
+                                                new_station.add_adjacent_station(next_station, next_distance)
+                                                system.stations[next_station].add_adjacent_station(new_station_name, next_distance)
+                                                print(f"建立新连接: {new_station_name} -> {next_station}，距离: {next_distance}米")
+                                    
+                                    # 将新站点插入到线路的正确位置
+                                    if connect_idx == 0:
+                                        # 如果连接站是起点，则在开头添加
+                                        system.lines[line_name].stations.insert(0, new_station_name)
+                                    elif connect_idx == len(system.lines[line_name].stations) - 1:
+                                        # 如果连接站是终点，则在末尾添加
+                                        system.lines[line_name].stations.append(new_station_name)
+                                    else:
+                                        # 否则在连接站后面添加
+                                        system.lines[line_name].stations.insert(connect_idx + 1, new_station_name)
+                                except ValueError:
+                                    # 如果连接站点不在线路上，简单地将新站点添加到末尾
+                                    if new_station_name not in system.lines[line_name].stations:
+                                        system.lines[line_name].stations.append(new_station_name)
+                            
+                            # 只处理第一个连接站点
+                            break
+            else:
+                # 没有提供连接信息，使用默认连接
+                print(f"没有提供连接信息，尝试添加 {new_station_name} 到线路 {line_name} 的末尾")
+                
+                # 如果线路存在
+                if line_name in system.lines and system.lines[line_name].stations:
+                    # 获取线路上最后一个站点
+                    last_station = system.lines[line_name].stations[-1]
+                    
+                    # 计算默认距离（基于地理位置）
+                    default_distance = calculate_distance(
+                        station_data['lat'], 
+                        station_data['lng'],
+                        system.stations[last_station].lat if hasattr(system.stations[last_station], 'lat') else 0,
+                        system.stations[last_station].lng if hasattr(system.stations[last_station], 'lng') else 0
+                    )
+                    
+                    # 最小距离为1000米
+                    if default_distance < 1000:
+                        default_distance = 1000
+                    
+                    try:
+                        # 使用编辑器添加站点到线路
+                        system.editor.add_station_to_line(
+                            line_id=line_name,
+                            station_name=new_station_name,
+                            connected_station=last_station,
+                            distance=default_distance
+                        )
+                        
+                        print(f"已使用编辑器连接站点 {new_station_name} 和 {last_station}，距离 {default_distance} 米")
+                    except ValueError as e:
+                        # 如果添加失败，直接建立相邻关系
+                        print(f"添加站点到线路失败：{str(e)}，直接建立连接关系")
+                        new_station.add_line(line_name)
+                        new_station.add_adjacent_station(last_station, default_distance)
+                        system.stations[last_station].add_adjacent_station(new_station_name, default_distance)
+                        
+                        # 添加到线路末尾
+                        if new_station_name not in system.lines[line_name].stations:
+                            system.lines[line_name].stations.append(new_station_name)
                 else:
-                    # 如果没有提供连接信息，但提供了站点列表，查找相邻站点
-                    if len(line_stations) >= 2:
-                        idx = line_stations.index(new_station_name)
-                        
-                        # 添加与相邻站点的连接关系
-                        if idx > 0:
-                            prev_station = line_stations[idx - 1]
-                            # 这里使用默认距离，因为没有用户提供的具体距离
-                            default_distance = 1000  # 默认1000米
-                            new_station.add_adjacent_station(prev_station, default_distance)
-                            system.stations[prev_station].add_adjacent_station(new_station_name, default_distance)
-                            print(f"警告: 使用默认距离 {default_distance}米 连接站点 {new_station_name} 和 {prev_station}")
-                        
-                        if idx < len(line_stations) - 1:
-                            next_station = line_stations[idx + 1]
-                            # 这里使用默认距离，因为没有用户提供的具体距离
-                            default_distance = 1000  # 默认1000米
-                            new_station.add_adjacent_station(next_station, default_distance)
-                            system.stations[next_station].add_adjacent_station(new_station_name, default_distance)
-                            print(f"警告: 使用默认距离 {default_distance}米 连接站点 {new_station_name} 和 {next_station}")
-        
-        # 更新站点的经纬度信息（用于前端显示）
-        new_station.lat = station_data['lat']
-        new_station.lng = station_data['lng']
+                    # 线路不存在或没有站点，建立新线路
+                    print(f"线路 {line_name} 不存在或无站点，创建新线路")
+                    from models.line import Line
+                    new_line = Line(line_name, float(line_data['speed']))
+                    new_line.stations = [new_station_name]
+                    system.lines[line_name] = new_line
+                    new_station.add_line(line_name)
         
         # 更新规划器
         from services.subway_planner import SubwayPlanner

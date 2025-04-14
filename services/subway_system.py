@@ -64,6 +64,123 @@ class SubwaySystemEditor:
         self.subway_system.stations[terminal_station].add_adjacent_station(new_station, distance)
         
         return line
+    
+    def create_new_line(self, line_id, station_name, speed):
+        """创建新线路
+        
+        Args:
+            line_id: 新线路ID
+            station_name: 初始站点名称
+            speed: 线路速度(km/h)
+            
+        Returns:
+            新创建的线路对象
+        """
+        # 检查线路是否已存在
+        if line_id in self.subway_system.lines:
+            raise ValueError(f"线路 {line_id} 已存在")
+        
+        # 检查站点是否存在
+        if station_name not in self.subway_system.stations:
+            raise ValueError(f"站点 {station_name} 不存在")
+        
+        # 创建新线路
+        from models.line import Line
+        new_line = Line(line_id, float(speed))
+        new_line.stations = [station_name]
+        
+        # 更新站点的线路信息
+        self.subway_system.stations[station_name].add_line(line_id)
+        
+        # 添加线路到系统
+        self.subway_system.lines[line_id] = new_line
+        
+        return new_line
+    
+    def add_station_to_line(self, line_id, station_name, connected_station, distance):
+        """向已有线路添加站点
+        
+        Args:
+            line_id: 线路ID
+            station_name: 要添加的站点名称
+            connected_station: 与新站点相连的已有站点
+            distance: 两站点间的距离
+            
+        Returns:
+            更新后的线路对象
+        """
+        # 检查线路是否存在
+        if line_id not in self.subway_system.lines:
+            raise ValueError(f"线路 {line_id} 不存在")
+        
+        line = self.subway_system.lines[line_id]
+        
+        # 检查连接站点是否在线路上
+        if connected_station not in line.stations:
+            raise ValueError(f"站点 {connected_station} 不在线路 {line_id} 上")
+        
+        # 获取连接站点在线路中的位置
+        connected_idx = line.stations.index(connected_station)
+        
+        # 检查新站点是否已存在于系统中
+        if station_name not in self.subway_system.stations:
+            # 创建新站点
+            from models.station import Station
+            new_station = Station(station_name)
+            new_station.add_line(line_id)
+            self.subway_system.stations[station_name] = new_station
+        else:
+            # 使用已有站点
+            new_station = self.subway_system.stations[station_name]
+            # 将线路添加到站点
+            new_station.add_line(line_id)
+        
+        # 确定新站点在线路中的位置
+        if connected_idx == 0:
+            # 如果连接站点是起点，则在开头添加
+            line.stations.insert(0, station_name)
+            prev_station = None
+            next_station = connected_station
+        elif connected_idx == len(line.stations) - 1:
+            # 如果连接站点是终点，则在末尾添加
+            line.stations.append(station_name)
+            prev_station = connected_station
+            next_station = None
+        else:
+            # 否则在连接站点后面添加
+            next_station = line.stations[connected_idx + 1]
+            line.stations.insert(connected_idx + 1, station_name)
+            prev_station = connected_station
+            
+            # 在线路中间插入站点时，需要删除原有站点间的直接连接
+            if prev_station and next_station:
+                # 检查原来的两个站点之间是否有直接连接，如果有则删除
+                if next_station in self.subway_system.stations[prev_station].adjacent_stations:
+                    # 计算原来的距离，用于日志
+                    original_distance = self.subway_system.stations[prev_station].adjacent_stations[next_station]
+                    print(f"删除直接连接: {prev_station} -> {next_station}，原距离: {original_distance}米")
+
+                    # 删除直接连接关系
+                    del self.subway_system.stations[prev_station].adjacent_stations[next_station]
+                    del self.subway_system.stations[next_station].adjacent_stations[prev_station]
+        
+        # 更新相邻站点信息 - 与连接站点建立连接
+        new_station.add_adjacent_station(connected_station, distance)
+        self.subway_system.stations[connected_station].add_adjacent_station(station_name, distance)
+        
+        # 如果新站点被插入在两站点之间，还需要与下一个站点建立连接
+        if connected_idx < len(line.stations) - 2 and connected_idx > 0:
+            # 计算与下一个站点的距离（这里简化处理，使用相同的距离或可让用户输入）
+            next_station_distance = distance  # 这里可以改为从用户输入获取或使用其他估算方法
+            
+            # 建立与下一个站点的连接
+            next_station_name = line.stations[connected_idx + 2]  # 新站点后面的站点
+            new_station.add_adjacent_station(next_station_name, next_station_distance)
+            self.subway_system.stations[next_station_name].add_adjacent_station(station_name, next_station_distance)
+            
+            print(f"建立新连接: {station_name} -> {next_station_name}，距离: {next_station_distance}米")
+        
+        return line
 
 class SubwaySystem:
     def __init__(self, data_file='resources/data/line_speed_final.json'):
