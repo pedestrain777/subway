@@ -56,14 +56,39 @@ def query():
 def add_station():
     try:
         data = request.get_json()
-        system.editor.add_station(
+        
+        # 验证前后站点是否相邻
+        if not is_adjacent(data['line_id'], data['prev_station'], data['next_station']):
+            return jsonify({'success': False, 'message': '前后站点不相邻，无法添加新站点'})
+        
+        # 先添加新站点到前一站点之后
+        line = system.editor.add_station_to_line(
             line_id=data['line_id'],
-            prev_station=data['prev_station'],
-            next_station=data['next_station'],
-            new_station=data['new_station'],
-            prev_distance=float(data['prev_distance']),
-            next_distance=float(data['next_distance'])
+            station_name=data['new_station'],
+            connected_station=data['prev_station'],
+            distance=float(data['prev_distance'])
         )
+        
+        # 然后建立新站点与后一站点的连接
+        system.stations[data['new_station']].add_adjacent_station(
+            data['next_station'], 
+            float(data['next_distance'])
+        )
+        system.stations[data['next_station']].add_adjacent_station(
+            data['new_station'], 
+            float(data['next_distance'])
+        )
+        
+        # 删除前后站点之间的直接连接，防止形成环
+        if data['next_station'] in system.stations[data['prev_station']].adjacent_stations:
+            del system.stations[data['prev_station']].adjacent_stations[data['next_station']]
+        if data['prev_station'] in system.stations[data['next_station']].adjacent_stations:
+            del system.stations[data['next_station']].adjacent_stations[data['prev_station']]
+        
+        # 更新规划器
+        from services.subway_planner import SubwayPlanner
+        system.planner = SubwayPlanner(system.stations, system.lines)
+        
         # 返回更新后的地铁数据
         return jsonify({
             'success': True, 
@@ -71,21 +96,82 @@ def add_station():
             'data': system.get_system_data()
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/edit/remove_station', methods=['POST'])
 def remove_station():
     try:
         data = request.get_json()
-        system.editor.remove_station(data['station'])
+        station_to_remove = data['station']
+        
+        # 验证站点是否存在
+        if station_to_remove not in system.stations:
+            return jsonify({'success': False, 'message': f'站点 {station_to_remove} 不存在'})
+        
+        # 查找该站点所在的所有线路
+        station_lines = list(system.stations[station_to_remove].lines)
+        
+        # 检查是否为换乘站（不能删除换乘站）
+        if len(station_lines) > 1:
+            return jsonify({'success': False, 'message': f'站点 {station_to_remove} 是换乘站，不能删除'})
+        
+        # 获取该站点在线路中的相邻站点
+        adjacent_stations = list(system.stations[station_to_remove].adjacent_stations.keys())
+        
+        # 如果有两个相邻站点，需要在它们之间建立连接
+        if len(adjacent_stations) == 2:
+            a, b = adjacent_stations
+            # 计算距离（简单相加两段距离）
+            dist_a = system.stations[station_to_remove].adjacent_stations[a]
+            dist_b = system.stations[station_to_remove].adjacent_stations[b]
+            new_dist = dist_a + dist_b
+            
+            # 建立直接连接
+            system.stations[a].add_adjacent_station(b, new_dist)
+            system.stations[b].add_adjacent_station(a, new_dist)
+        
+        # 移除站点与相邻站点的连接关系
+        for adj in adjacent_stations:
+            if station_to_remove in system.stations[adj].adjacent_stations:
+                del system.stations[adj].adjacent_stations[station_to_remove]
+        
+        # 从线路中移除该站点
+        for line_id in station_lines:
+            if line_id in system.lines and station_to_remove in system.lines[line_id].stations:
+                system.lines[line_id].stations.remove(station_to_remove)
+        
+        # 从系统中移除该站点
+        del system.stations[station_to_remove]
+        
+        # 更新规划器
+        from services.subway_planner import SubwayPlanner
+        system.planner = SubwayPlanner(system.stations, system.lines)
+        
         # 返回更新后的地铁数据
         return jsonify({
             'success': True, 
-            'message': '站点删除成功',
+            'message': f'站点 {station_to_remove} 删除成功',
             'data': system.get_system_data()
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)})
+
+# 辅助函数：检查两个站点是否相邻
+def is_adjacent(line_id, station1, station2):
+    if line_id not in system.lines:
+        return False
+    
+    stations = system.lines[line_id].stations
+    try:
+        idx1 = stations.index(station1)
+        idx2 = stations.index(station2)
+        return abs(idx1 - idx2) == 1
+    except ValueError:
+        return False
 
 @app.route('/edit/extend_line', methods=['POST'])
 def extend_line():

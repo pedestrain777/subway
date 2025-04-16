@@ -1047,33 +1047,63 @@ function showNewStationForm(e) {
                 } else {
                     distanceHTML = '<p class="mb-2">请选择并输入与以下站点的距离（米）：</p>';
                     
-                    // 为线路上的所有站点创建选择框和距离输入框
-                    lineStations.forEach(station => {
-                        if (!stationData[station]) return;
-                        
-                        const safeStationId = station.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-                        const isClosestStation = station === closestStationInput.value;
-                        const distance = calculateDistance(
-                            clickedLatlng.lat, clickedLatlng.lng,
-                            stationData[station].lat, stationData[station].lng
-                        );
-                        
-                        distanceHTML += `
+                    // 生成单个站点的距离输入HTML
+                    function generateStationInputHTML(station, safeStationId, distance, isChecked) {
+                        return `
                             <div class="mb-2 border-bottom pb-2">
                                 <div class="form-check">
                                     <input class="form-check-input station-connect-check" type="checkbox" 
                                         id="check-${safeStationId}" data-station="${station}"
-                                        ${isClosestStation ? 'checked' : ''}>
+                                        ${isChecked ? 'checked' : ''}>
                                     <label class="form-check-label" for="check-${safeStationId}">
                                         ${station} <span class="text-muted">(约 ${Math.round(distance)} 米)</span>
                                     </label>
                                 </div>
                                 <input type="number" class="form-control mt-1" id="distance-${safeStationId}" 
-                                       placeholder="与${station}的距离（米）" value="${Math.round(distance)}" 
-                                       min="1" ${isClosestStation ? '' : 'disabled'}>
+                                    placeholder="与${station}的距离（米）" value="${Math.round(distance)}" 
+                                    min="1" ${isChecked ? '' : 'disabled'}>
                             </div>
                         `;
+                    }
+                    
+                    // 如果有最近站点，优先显示它
+                    if (closestStationInput.value && lineStations.includes(closestStationInput.value)) {
+                        const station = closestStationInput.value;
+                        const safeStationId = station.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                        const distance = calculateDistance(
+                            clickedLatlng.lat, clickedLatlng.lng,
+                            stationData[station].lat, stationData[station].lng
+                        );
+                        
+                        distanceHTML += generateStationInputHTML(station, safeStationId, distance, true);
+                    }
+                    
+                    // 对其他站点按距离排序
+                    const sortedStations = lineStations
+                        .filter(station => station !== closestStationInput.value && stationData[station])
+                        .map(station => {
+                            const distance = calculateDistance(
+                                clickedLatlng.lat, clickedLatlng.lng,
+                                stationData[station].lat, stationData[station].lng
+                            );
+                            return { name: station, distance };
+                        })
+                        .sort((a, b) => a.distance - b.distance);
+                    
+                    // 只显示前10个最近的站点
+                    sortedStations.slice(0, 10).forEach(({ name, distance }) => {
+                        const safeStationId = name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                        distanceHTML += generateStationInputHTML(name, safeStationId, distance, false);
                     });
+                    
+                    // 如果还有更多站点，显示一个消息
+                    if (sortedStations.length > 10) {
+                        distanceHTML += `
+                            <div class="alert alert-info mt-2">
+                                还有 ${sortedStations.length - 10} 个站点未显示。建议使用最近的站点进行连接。
+                            </div>
+                        `;
+                    }
                 }
                 
                 distanceInputs.innerHTML = distanceHTML;
